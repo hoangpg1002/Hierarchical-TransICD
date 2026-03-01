@@ -196,7 +196,7 @@ def build_vocab(train_full_filename='train_full.csv', out_filename='vocab.csv'):
 
     out_file_path = f'{constants.GENERATED_DIR}/{out_filename}'
     with open(out_file_path, 'w') as fout:
-        for word in cv.get_feature_names():
+        for word in cv.get_feature_names_out():
             fout.write(f'{word}\n')
 
 
@@ -242,10 +242,10 @@ def embed_words(disch_full_filename='disch_full.csv', embed_size=128, out_filena
     logging.info('\n**********************************************\n')
     logging.info('Training CBOW embedding...')
     logging.info(f'Params: embed_size={embed_size}, workers={num_cores-1}, min_count={min_count}, window={window}, negative={num_negatives}')
-    w2v_model = Word2Vec(min_count=min_count, window=window, size=embed_size, negative=num_negatives, workers=num_cores-1)
+    w2v_model = Word2Vec(min_count=min_count, window=window, vector_size=embed_size, negative=num_negatives, workers=num_cores-1)
     w2v_model.build_vocab(sentences, progress_per=10000)
     w2v_model.train(sentences, total_examples=w2v_model.corpus_count, epochs=30, report_delay=1)
-    w2v_model.init_sims(replace=True)
+    # w2v_model.init_sims(replace=True) # deprecated since Gensim 4.0.0
     w2v_model.save(f'{constants.GENERATED_DIR}/{out_filename}')
     logging.info('\n**********************************************\n')
     return out_filename
