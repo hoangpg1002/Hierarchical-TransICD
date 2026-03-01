@@ -1,0 +1,15 @@
+2026-03-01 16:27:41,512 processing notes file
+2026-03-01 16:29:31,904 Total number of rows: 12981
+2026-03-01 16:29:31,906 Total number of unique HADM_ID (disch_full): 11481
+2026-03-01 16:29:32,679 Started Preprocessing raw MIMIC-III data
+2026-03-01 16:29:32,826 Total unique HADM_ID (original): 22503
+2026-03-01 16:29:32,836 Total unique HADM_ID (ALL_CODES_filtered): 4404
+2026-03-01 16:29:32,837 Total unique ICD9_CODE (ALL_CODES_filtered): 3650
+2026-03-01 16:29:32,862 Merging discharge summary and ICD codes
+2026-03-01 16:29:33,625 Total number of unique HADM_ID (merged): 4404
+2026-03-01 16:29:34,266 Total rows in train_full.csv: 3953
+2026-03-01 16:29:34,547 Total rows in dev_full.csv: 150
+2026-03-01 16:29:34,572 Total rows in test_full.csv: 301
+2026-03-01 16:29:34,852 Total rows in train_50.csv: 575
+2026-03-01 16:29:34,899 Total rows in dev_50.csv: 124
+2026-03-01 16:29:34,916 Total rows in test_50.csv: 146
