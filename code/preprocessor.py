@@ -190,7 +190,7 @@ def build_vocab(train_full_filename='train_full.csv', out_filename='vocab.csv'):
     desc_dt = load_code_desc()
     desc_series = pd.Series(list(desc_dt.values())).apply(lambda text: clean_text(text, trantab, my_stopwords, stemmer))
 
-    full_text_series = train_df['TEXT'].append(desc_series, ignore_index=True)
+    full_text_series = pd.concat([train_df['TEXT'], desc_series], ignore_index=True)
     cv = CountVectorizer(min_df=1)
     cv.fit(full_text_series)
 
