@@ -256,7 +256,7 @@ def map_vocab_to_embed(vocab_filename='vocab.csv', embed_filename='disch_full.w2
     wv = model.wv
     del model
 
-    embed_size = len(wv.word_vec(wv.index2word[0]))
+    embed_size = len(wv.word_vec(wv.index_to_key[0]))
     word_to_idx = {}
     with open(f'{constants.GENERATED_DIR}/{vocab_filename}', 'r') as fin, open(f'{constants.GENERATED_DIR}/{out_filename}', 'w') as fout:
         pad_embed = np.zeros(embed_size)
