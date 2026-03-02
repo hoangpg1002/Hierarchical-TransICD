@@ -2,6 +2,7 @@ import argparse
 
 PAD_SYMBOL = "<PAD>"
 UNK_SYMBOL = "<UNK>"
+EOS_SYMBOL = "<EOS>"   # Sentence boundary marker inserted by preprocessor
 
 DATA_DIR = '../mimicdata/'
 CAML_DIR = '../mimicdata/caml/'
@@ -123,6 +124,53 @@ def get_args():
         help='Dropout rate for transformers'
     )
 
-    args = parser.parse_args()  # '--target_kernel_size 4 8'.split()
+    # -------------------------------------------------------------------------
+    # Hierarchical TransICD hyperparameters
+    # (only used when --model HierarchicalTransICD)
+    # -------------------------------------------------------------------------
+    parser.add_argument(
+        '--max_num_sents',
+        type=int,
+        default=150,
+        help='[Hierarchical] Maximum number of sentences per document (N_s)'
+    )
+
+    parser.add_argument(
+        '--max_sent_len',
+        type=int,
+        default=30,
+        help='[Hierarchical] Maximum number of tokens per sentence (T_w). '
+             'Recommended: average sentence length in the corpus.'
+    )
+
+    parser.add_argument(
+        '--word_num_layers',
+        type=int,
+        default=2,
+        help='[Hierarchical] Number of Transformer layers in the word-level encoder'
+    )
+
+    parser.add_argument(
+        '--word_num_heads',
+        type=int,
+        default=8,
+        help='[Hierarchical] Number of attention heads in the word-level encoder'
+    )
+
+    parser.add_argument(
+        '--sent_num_layers',
+        type=int,
+        default=2,
+        help='[Hierarchical] Number of Transformer layers in the sentence-level encoder'
+    )
+
+    parser.add_argument(
+        '--sent_num_heads',
+        type=int,
+        default=8,
+        help='[Hierarchical] Number of attention heads in the sentence-level encoder'
+    )
+
+    args = parser.parse_args()
     return args
 
