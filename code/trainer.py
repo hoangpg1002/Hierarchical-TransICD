@@ -16,7 +16,11 @@ from torch.utils.data import DataLoader
 def train(model, train_set, dev_set, test_set, hyper_params, batch_size, device):
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=1)
     m = RunManager()
-    optimizer = optim.AdamW(model.parameters(), lr=hyper_params.learning_rate)
+    optimizer = optim.AdamW(model.parameters(), lr=hyper_params.learning_rate, weight_decay=1e-4)
+    # Cosine annealing LR schedule: helps transformers converge consistently
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=hyper_params.num_epoch, eta_min=hyper_params.learning_rate * 0.01
+    )
 
     num_batches = len(train_loader)
     model_name = model.__class__.__name__
@@ -41,6 +45,7 @@ def train(model, train_set, dev_set, test_set, hyper_params, batch_size, device)
 
         epoch_loss = 0.0
         t0 = time.time()
+        current_lr = scheduler.get_last_lr()[0] if epoch > 0 else hyper_params.learning_rate
 
         for batch_idx, batch in enumerate(train_loader):
             texts   = batch['text'].to(device)
@@ -55,6 +60,8 @@ def train(model, train_set, dev_set, test_set, hyper_params, batch_size, device)
 
             optimizer.zero_grad()
             loss.backward()
+            # Gradient clipping: prevents exploding gradients in deep transformers
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             epoch_loss += loss.item()
@@ -69,20 +76,25 @@ def train(model, train_set, dev_set, test_set, hyper_params, batch_size, device)
                     f"Batch [{batch_idx+1:4d}/{num_batches}] "
                     f"| Loss: {loss.item():.4f} "
                     f"| Avg Loss: {avg_loss:.4f} "
+                    f"| LR: {current_lr:.2e}"
                     f"| Time: {elapsed:.1f}s",
                     flush=True
                 )
 
+        scheduler.step()
+
         # ---- Epoch summary ----
         epoch_avg_loss = epoch_loss / num_batches
         epoch_time = time.time() - t0
+        new_lr = scheduler.get_last_lr()[0]
         summary = (
             f"\n  ─── Epoch {epoch+1:3d}/{hyper_params.num_epoch} Done "
             f"| Avg Train Loss: {epoch_avg_loss:.4f} "
+            f"| LR: {new_lr:.2e} "
             f"| Time: {epoch_time:.1f}s ───"
         )
         print(summary, flush=True)
-        logging.info(f"Epoch {epoch+1} | avg_loss={epoch_avg_loss:.4f} | time={epoch_time:.1f}s")
+        logging.info(f"Epoch {epoch+1} | avg_loss={epoch_avg_loss:.4f} | lr={new_lr:.2e} | time={epoch_time:.1f}s")
 
         m.end_epoch()
 

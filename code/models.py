@@ -148,14 +148,10 @@ class Transformer(nn.Module):
     def forward(self, inputs, targets=None):
         src_key_padding_mask = (inputs == self.pad_idx).to(self.device)  # (B, S)
 
-        embeds = self.pos_encoder(
-            self.embedder(inputs) * math.sqrt(self.embed_size)
-        )                                         # Pos encoding expects (S, B, E)
-        embeds = self.dropout(embeds.permute(1, 0, 2))     # This is wrong — fix:
-        # Redo: pos_encoder expects (S, B, E)
-        embeds = self.embedder(inputs) * math.sqrt(self.embed_size)  # (B, S, E)
+        # (B, S, E) → scale → dropout → permute to (S, B, E) for pos encoder
+        embeds = self.embedder(inputs) * math.sqrt(self.embed_size)    # (B, S, E)
         embeds = self.dropout(embeds)
-        embeds = self.pos_encoder(embeds.permute(1, 0, 2))            # (S, B, E)
+        embeds = self.pos_encoder(embeds.permute(1, 0, 2))              # (S, B, E)
 
         encoded_inputs = self.encoder(embeds, src_key_padding_mask=src_key_padding_mask)
         encoded_inputs = encoded_inputs.permute(1, 0, 2)               # (B, S, E)
@@ -444,6 +440,17 @@ class HierarchicalTransICD(nn.Module):
         # flat_pad_mask: (B * N_s, T_w)
         flat_pad_mask = (flat_inputs == self.pad_idx).to(self.device)
 
+        # Identify fully-padded sentence slots (all tokens are PAD).
+        # PyTorch TransformerEncoder produces NaN when all keys are masked.
+        # We handle this by temporarily un-masking one token position for
+        # all-PAD sentences, then zero-ing out those sentence vectors after pooling.
+        # fully_pad_sent: (B * N_s,) — True if the entire sentence is PAD
+        fully_pad_sent = flat_pad_mask.all(dim=1)  # (B*N_s,)
+
+        # Safe mask: un-mask position 0 for all-PAD sentences to prevent NaN
+        safe_pad_mask = flat_pad_mask.clone()
+        safe_pad_mask[fully_pad_sent, 0] = False   # keep at least one key unmasked
+
         # Token embedding with embedding scale (Vaswani et al., 2017)
         # flat_embeds: (B*N_s, T_w, E)
         flat_embeds = self.embedder(flat_inputs.to(self.device)) * math.sqrt(self.embed_size)
@@ -455,19 +462,22 @@ class HierarchicalTransICD(nn.Module):
 
         # Word-level self-attention: complexity O(B * N_s * T_w^2)
         word_encoded = self.word_encoder(
-            flat_embeds, src_key_padding_mask=flat_pad_mask
+            flat_embeds, src_key_padding_mask=safe_pad_mask
         )                                                   # (T_w, B*N_s, E)
         word_encoded = word_encoded.permute(1, 0, 2)        # (B*N_s, T_w, E)
 
         # ------------------------------------------------------------------
         # Aggregate token states to a sentence vector via masked mean pooling.
-        # This is preferred over CLS-token pooling because it is O(L) and
-        # does not require a special trainable token.
-        # ------------------------------------------------------------------
         # non_pad_mask: (B*N_s, T_w, 1) — 1.0 for real tokens
+        # ------------------------------------------------------------------
         non_pad_mask = (~flat_pad_mask).unsqueeze(-1).float()
         # Masked mean: sum(h_i * m_i) / sum(m_i)
         sent_vecs = (word_encoded * non_pad_mask).sum(dim=1) / (non_pad_mask.sum(dim=1) + 1e-9)
+
+        # Zero out sentence vectors for fully-padded sentence slots
+        # (their mean-pooled value is undefined / noise from 1 unmasked PAD token)
+        sent_vecs[fully_pad_sent] = 0.0
+
         # sent_vecs: (B*N_s, E) -> (B, N_s, E)
         sent_vecs = sent_vecs.view(batch_size, num_sents, self.embed_size)
 

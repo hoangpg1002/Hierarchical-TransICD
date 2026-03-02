@@ -131,23 +131,25 @@ def get_args():
     parser.add_argument(
         '--max_num_sents',
         type=int,
-        default=150,
-        help='[Hierarchical] Maximum number of sentences per document (N_s)'
+        default=100,
+        help='[Hierarchical] Maximum number of sentences per document (N_s). '
+             'Total token coverage = max_num_sents * max_sent_len.'
     )
 
     parser.add_argument(
         '--max_sent_len',
         type=int,
-        default=30,
+        default=50,
         help='[Hierarchical] Maximum number of tokens per sentence (T_w). '
-             'Recommended: average sentence length in the corpus.'
+             'MIMIC discharge notes have avg ~35 tokens/sentence after preprocessing.'
     )
 
     parser.add_argument(
         '--word_num_layers',
         type=int,
-        default=2,
-        help='[Hierarchical] Number of Transformer layers in the word-level encoder'
+        default=1,
+        help='[Hierarchical] Number of Transformer layers in the word-level encoder. '
+             'Keep shallow (1-2) to avoid overfitting at the sentence level.'
     )
 
     parser.add_argument(
