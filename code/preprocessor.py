@@ -5,7 +5,6 @@ from sklearn.feature_extraction.text import CountVectorizer
 import constants
 from nltk.corpus import stopwords
 from nltk.stem import SnowballStemmer
-from nltk.tokenize import sent_tokenize
 import re
 import string
 from gensim.models import Word2Vec
@@ -69,36 +68,22 @@ def combine_diag_proc_codes(hadm_id_set, out_filename='ALL_CODES_filtered.csv'):
 
 
 def clean_text(text, trantab, my_stopwords=None, stemmer=None):
-    # Split the document into sentences first
-    text = str(text) if not isinstance(text, str) else text
-    sentences = sent_tokenize(text.lower())
-    
-    cleaned_sentences = []
-    for sentence in sentences:
-        sentence = sentence.translate(trantab)
-        tokens = sentence.strip().split()
-        
-        if stemmer:
-            tokens = [stemmer.stem(t) for t in tokens]
-        
-        tokens = [token for token in tokens if not token.isnumeric() and len(token) > 2]
-        
-        if my_stopwords:
-            tokens = [x for x in tokens if x not in my_stopwords]
-        
-        cleaned_sentence = ' '.join(tokens)
-        cleaned_sentence = re.sub('-', '', cleaned_sentence)
-        cleaned_sentence = re.sub(r'\d+\s', ' ', cleaned_sentence)
-        cleaned_sentence = re.sub(r'\d', 'n', cleaned_sentence)
-        
-        # Only add non-empty sentences
-        if len(cleaned_sentence.strip()) > 0:
-            # Append EOS token to preserve sentence boundaries
-            cleaned_sentences.append(cleaned_sentence + " <EOS>")
-            
-    # Join all sentences back into a single string
-    result = ' '.join(cleaned_sentences)
-    return result
+    text = text.lower().translate(trantab)
+    tokens = text.strip().split()
+
+    if stemmer:
+        tokens = [stemmer.stem(t) for t in tokens]
+
+    tokens = [token for token in tokens if not token.isnumeric() and len(token) > 2]
+
+    if my_stopwords:
+        tokens = [x for x in tokens if x not in my_stopwords]
+
+    text = ' '.join(tokens)
+    text = re.sub('-', '', text)
+    text = re.sub(r'\d+\s', ' ', text)
+    text = re.sub(r'\d', 'n', text)
+    return text
 
 
 def write_discharge_summaries(out_filename='disch_full.csv'):
@@ -190,13 +175,13 @@ def build_vocab(train_full_filename='train_full.csv', out_filename='vocab.csv'):
     desc_dt = load_code_desc()
     desc_series = pd.Series(list(desc_dt.values())).apply(lambda text: clean_text(text, trantab, my_stopwords, stemmer))
 
-    full_text_series = pd.concat([train_df['TEXT'], desc_series], ignore_index=True)
+    full_text_series = train_df['TEXT'].append(desc_series, ignore_index=True)
     cv = CountVectorizer(min_df=1)
     cv.fit(full_text_series)
 
     out_file_path = f'{constants.GENERATED_DIR}/{out_filename}'
     with open(out_file_path, 'w') as fout:
-        for word in cv.get_feature_names_out():
+        for word in cv.get_feature_names():
             fout.write(f'{word}\n')
 
 
@@ -242,10 +227,10 @@ def embed_words(disch_full_filename='disch_full.csv', embed_size=128, out_filena
     logging.info('\n**********************************************\n')
     logging.info('Training CBOW embedding...')
     logging.info(f'Params: embed_size={embed_size}, workers={num_cores-1}, min_count={min_count}, window={window}, negative={num_negatives}')
-    w2v_model = Word2Vec(min_count=min_count, window=window, vector_size=embed_size, negative=num_negatives, workers=num_cores-1)
+    w2v_model = Word2Vec(min_count=min_count, window=window, size=embed_size, negative=num_negatives, workers=num_cores-1)
     w2v_model.build_vocab(sentences, progress_per=10000)
     w2v_model.train(sentences, total_examples=w2v_model.corpus_count, epochs=30, report_delay=1)
-    # w2v_model.init_sims(replace=True) # deprecated since Gensim 4.0.0
+    w2v_model.init_sims(replace=True)
     w2v_model.save(f'{constants.GENERATED_DIR}/{out_filename}')
     logging.info('\n**********************************************\n')
     return out_filename
@@ -256,32 +241,24 @@ def map_vocab_to_embed(vocab_filename='vocab.csv', embed_filename='disch_full.w2
     wv = model.wv
     del model
 
-    embed_size = len(wv.word_vec(wv.index_to_key[0]))
+    embed_size = len(wv.word_vec(wv.index2word[0]))
     word_to_idx = {}
     with open(f'{constants.GENERATED_DIR}/{vocab_filename}', 'r') as fin, open(f'{constants.GENERATED_DIR}/{out_filename}', 'w') as fout:
         pad_embed = np.zeros(embed_size)
         unk_embed = np.random.randn(embed_size)
-        eos_embed = np.random.randn(embed_size) # EOS embedding
         unk_embed_normalized = unk_embed / float(np.linalg.norm(unk_embed) + 1e-6)
-        eos_embed_normalized = eos_embed / float(np.linalg.norm(eos_embed) + 1e-6)
-
         fout.write(constants.PAD_SYMBOL + ' ' + np.array2string(pad_embed, max_line_width=np.inf, separator=' ')[1:-1] + '\n')
         fout.write(constants.UNK_SYMBOL + ' ' + np.array2string(unk_embed_normalized, max_line_width=np.inf, separator=' ')[1:-1] + '\n')
-        fout.write('<EOS>' + ' ' + np.array2string(eos_embed_normalized, max_line_width=np.inf, separator=' ')[1:-1] + '\n')
-
         word_to_idx[constants.PAD_SYMBOL] = 0
         word_to_idx[constants.UNK_SYMBOL] = 1
-        word_to_idx['<EOS>'] = 2
 
         for line in fin:
             word = line.strip()
-            if word == '<EOS>':
-                continue
             word_embed = wv.word_vec(word)
             fout.write(word + ' ' + np.array2string(word_embed, max_line_width=np.inf, separator=' ')[1:-1] + '\n')
             word_to_idx[word] = len(word_to_idx)
 
-    logging.info(f'Size of training vocabulary (including PAD, UNK, EOS): {len(word_to_idx)}')
+    logging.info(f'Size of training vocabulary (including PAD, UNK): {len(word_to_idx)}')
     return word_to_idx
 
 
@@ -311,4 +288,3 @@ if __name__ == '__main__':
     embed_filename = embed_words(embed_size=args.embed_size)
     word_to_idx = map_vocab_to_embed()
     vectorize_code_desc(word_to_idx)
-

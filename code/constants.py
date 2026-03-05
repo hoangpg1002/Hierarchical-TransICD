@@ -2,7 +2,6 @@ import argparse
 
 PAD_SYMBOL = "<PAD>"
 UNK_SYMBOL = "<UNK>"
-EOS_SYMBOL = "<EOS>"   # Sentence boundary marker inserted by preprocessor
 
 DATA_DIR = '../mimicdata/'
 CAML_DIR = '../mimicdata/caml/'
@@ -42,7 +41,7 @@ def get_args():
         '--model',
         type=str,
         default='TransICD',
-        help='Transformer or TransICD models'
+        help='Transformer, TransICD, or HierarchicalTransICD models'
     )
 
     parser.add_argument(
@@ -124,55 +123,19 @@ def get_args():
         help='Dropout rate for transformers'
     )
 
-    # -------------------------------------------------------------------------
-    # Hierarchical TransICD hyperparameters
-    # (only used when --model HierarchicalTransICD)
-    # -------------------------------------------------------------------------
     parser.add_argument(
-        '--max_num_sents',
+        '--sentence_len',
         type=int,
-        default=100,
-        help='[Hierarchical] Maximum number of sentences per document (N_s). '
-             'Total token coverage = max_num_sents * max_sent_len.'
+        default=25,
+        help='Number of tokens per pseudo-sentence chunk for hierarchical model'
     )
 
     parser.add_argument(
-        '--max_sent_len',
-        type=int,
-        default=50,
-        help='[Hierarchical] Maximum number of tokens per sentence (T_w). '
-             'MIMIC discharge notes have avg ~35 tokens/sentence after preprocessing.'
-    )
-
-    parser.add_argument(
-        '--word_num_layers',
+        '--sentence_num_layers',
         type=int,
         default=1,
-        help='[Hierarchical] Number of Transformer layers in the word-level encoder. '
-             'Keep shallow (1-2) to avoid overfitting at the sentence level.'
+        help='Number of transformer layers for sentence-level encoder in hierarchical model'
     )
 
-    parser.add_argument(
-        '--word_num_heads',
-        type=int,
-        default=8,
-        help='[Hierarchical] Number of attention heads in the word-level encoder'
-    )
-
-    parser.add_argument(
-        '--sent_num_layers',
-        type=int,
-        default=2,
-        help='[Hierarchical] Number of Transformer layers in the sentence-level encoder'
-    )
-
-    parser.add_argument(
-        '--sent_num_heads',
-        type=int,
-        default=8,
-        help='[Hierarchical] Number of attention heads in the sentence-level encoder'
-    )
-
-    args = parser.parse_args()
+    args = parser.parse_args()  # '--target_kernel_size 4 8'.split()
     return args
-
